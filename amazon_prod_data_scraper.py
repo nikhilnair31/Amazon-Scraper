@@ -6,9 +6,10 @@ import numpy as np
 import pandas as pd
 
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support import expected_conditions as EC
 
 chrome_options = webdriver.ChromeOptions()
@@ -17,12 +18,6 @@ chrome_options.add_argument('--no-sandbox')
 chrome_options.add_argument('--disable-dev-shm-usage')
 
 driver = webdriver.Chrome(options=chrome_options)
-
-file_path = 'Data/amazon_prod_link_scraper.csv'
-df_prod_links = pd.read_csv(file_path)
-df_prod_links = df_prod_links.drop_duplicates(subset='Product Link')
-df_prod_links = df_prod_links.dropna()
-df_prod_links = df_prod_links.reset_index()
 
 def pull_product_data(prod_link_df):
     df = prod_link_df.copy()
@@ -41,10 +36,8 @@ def pull_product_data(prod_link_df):
 
             # print(f'{"-"*50}\n')
 
-            name = WebDriverWait(driver, 30).until(
-                EC.presence_of_element_located((By.XPATH, '//div[@id="titleSection"]'))
-            )
-            # name = driver.find_element(By.XPATH, '//div[@id="titleSection"]')
+            # name = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//div[@id="titleSection"]')))
+            name = driver.find_element(By.XPATH, '//div[@id="titleSection"]')
             df.at[index, "product_name"] = name.text
             # print(f'{df.at[index, "product_name"]}')
 
@@ -86,10 +79,13 @@ def pull_product_data(prod_link_df):
 
     return df
 
-df_product_data = pull_product_data(df_prod_links.head(10))
-# print(f'{df_product_data}')
+file_path = 'Data/amazon_prod_link_scraper.csv'
+df_prod_links = pd.read_csv(file_path)
+df_prod_links = df_prod_links.drop_duplicates(subset='Product Link')
+df_prod_links = df_prod_links.dropna()
 
-# Define the CSV file name
+df_product_data = pull_product_data(df_prod_links.head(1000))
+
 file_path = 'Data/amazon_prod_data_scraper.csv'
 df_product_data.to_csv(file_path, index=False)
 print(f"CSV file saved at: {file_path}")
