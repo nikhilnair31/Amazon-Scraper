@@ -114,13 +114,13 @@ class Scraper():
                 loaded_df.at[index, "product_name"] = name.text
                 # print(f'{loaded_df.at[index, "product_name"]}')
 
-                # whole_price = self.driver.find_elements(By.XPATH, '//span[@class="a-price-whole"]')
-                # fraction_price = self.driver.find_elements(By.XPATH, '//span[@class="a-price-fraction"]')
-                # if whole_price != [] and fraction_price != []:
-                #     price = '.'.join([whole_price[0].text, fraction_price[0].text])
-                # else:
-                #     price = 0
-                price = self.driver.find_elements(By.XPATH, '//span[@class="a-price a-text-price a-size-medium apexPriceToPay"]/span[@class="a-offscreen"]')
+                # price = self.driver.find_elements(By.XPATH, '//span[@class="a-price a-text-price a-size-medium apexPriceToPay"]/span[@class="a-offscreen"]')
+                whole_price = self.driver.find_elements(By.XPATH, '//span[@class="a-price-whole"]')
+                fraction_price = self.driver.find_elements(By.XPATH, '//span[@class="a-price-fraction"]')
+                if whole_price != [] and fraction_price != []:
+                    price = '.'.join([whole_price[0].text, fraction_price[0].text])
+                else:
+                    price = 0
                 loaded_df.at[index, "product_price"] = price
                 # print(f'{loaded_df.at[index, "product_price"]}')
 
@@ -151,7 +151,7 @@ class Scraper():
                 print(f'ERROR\n{error_info}\n')
                 print(f'{"="*50}\n')
 
-        saved_file_path = 'Data/amazon_prod_link_scraper.csv'
+        saved_file_path = 'Data/amazon_prod_data_scraper.csv'
         self.genObj.save_dataframe_to_csv(loaded_df, saved_file_path)
         
         self.driver.quit()
@@ -164,39 +164,52 @@ class Scraper():
         loaded_df = loaded_df.drop_duplicates(subset='product_review_link')
         loaded_df = loaded_df.dropna()
 
+        dict_of_data = {
+            "Product ASIN": [], 
+            "reviewer_name": [], "reviewer_rating": [], "reviewer_title": [], 
+            "reviewer_date": [], "reviewer_verified": [], "review_body": []
+        }
         for index, row in loaded_df.iterrows():
             try:
                 self.driver.get(row["product_review_link"])
                 self.driver.implicitly_wait(10)
 
-                reviews = WebDriverWait(self.driver, 10).until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "a-section review aok-relative")]')))
-                # print(f'reviews len: {len(reviews)}')
-                
-                for review in reviews:
-                    # Save each products ASIN
-                    dict_of_data["Product ASIN"].append(row["Product ASIN"])
+                while True:
+                    reviews = WebDriverWait(self.driver, 10).until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "a-section review aok-relative")]')))
+                    # print(f'reviews len: {len(reviews)}')
+                    
+                    for review in reviews:
+                        # Save each products ASIN
+                        dict_of_data["Product ASIN"].append(row["Product ASIN"])
 
-                    # Initialize empty dictionary to hold fetched data. Iterate through dictionary reviews and fetch data
-                    fetched_data = {
-                        "reviewer_name": './/div[@class="a-profile-content"]',
-                        "reviewer_date": './/span[@data-hook="review-date"]',
-                        "reviewer_verified": './/span[@data-hook="avp-badge"]',
-                        "review_body": './/div[@class="a-row a-spacing-small review-data"]',
-                    }
-                    for column, xpath in fetched_data.items():
-                        try:
-                            element = review.find_element(By.XPATH, xpath)
-                            dict_of_data[column].append(element.text)
-                        except NoSuchElementException:
-                            dict_of_data[column].append("")
-                            print(f"{column} not found, filling with an empty string.")
+                        # Initialize empty dictionary to hold fetched data. Iterate through dictionary reviews and fetch data
+                        fetched_data = {
+                            "reviewer_name": './/div[@class="a-profile-content"]',
+                            "reviewer_date": './/span[@data-hook="review-date"]',
+                            "reviewer_verified": './/span[@data-hook="avp-badge"]',
+                            "review_body": './/div[@class="a-row a-spacing-small review-data"]',
+                        }
+                        for column, xpath in fetched_data.items():
+                            try:
+                                element = review.find_element(By.XPATH, xpath)
+                                dict_of_data[column].append(element.text)
+                            except NoSuchElementException:
+                                dict_of_data[column].append("")
+                                print(f"{column} not found, filling with an empty string.")
 
-                    #FIXME: GET REVIEWER'S RATING 
-                    rating_element = review.find_element(By.XPATH, './/i[@data-hook="review-star-rating"]/span[@class="a-icon-alt"]')
-                    dict_of_data["reviewer_rating"].append(rating_element.text)
+                        #FIXME: Get reviewer's rating 
+                        rating_element = review.find_element(By.XPATH, './/i[@data-hook="review-star-rating"]/span[@class="a-icon-alt"]')
+                        dict_of_data["reviewer_rating"].append(rating_element.text)
 
-                    title_element = review.find_element(By.XPATH, './/a[@data-hook="review-title"]/span[not(@class)]')
-                    dict_of_data["reviewer_title"].append(title_element.text)
+                        title_element = review.find_element(By.XPATH, './/a[@data-hook="review-title"]/span[not(@class)]')
+                        dict_of_data["reviewer_title"].append(title_element.text)
+                    
+                    #TODO: Confirm if this works
+                    # Wait until the next button is clickable, and then click it
+                    next_button = WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable((By.XPATH, '//ul[@class="a-pagination"]//li[@class="a-last"]/a'))
+                    )
+                    next_button.click()
 
             except Exception as e:
                 print(f'{"="*50}\n')
@@ -204,11 +217,6 @@ class Scraper():
                 print(f'ERROR\n{error_info}\n')
                 print(f'{"="*50}\n')
 
-        dict_of_data = {
-            "Product ASIN": [], 
-            "reviewer_name": [], "reviewer_rating": [], "reviewer_title": [], 
-            "reviewer_date": [], "reviewer_verified": [], "review_body": []
-        }
         saved_df = pd.DataFrame(dict_of_data)
         saved_file_path = 'Data/amazon_prod_reviews_scraper.csv'
         self.genObj.save_dataframe_to_csv(saved_df, saved_file_path)
