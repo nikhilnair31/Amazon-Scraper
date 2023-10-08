@@ -19,17 +19,18 @@ chrome_options.add_argument('--disable-dev-shm-usage')
 
 driver = webdriver.Chrome(options=chrome_options)
 
-page_url = 'https://www.amazon.com/s?k=toilets'
+page_url = 'https://www.amazon.com/s?rh=n%3A11056591&fs=true&ref=lp_11056591_sar'
 product_asin = []
 product_link = []
-max_pages = 5
+max_pages = 100
 
+start_time = time.time()
 for page_num in range(1, max_pages):
     driver.get(page_url)
     driver.implicitly_wait(10)
     
     items = WebDriverWait(driver, 10).until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "s-result-item s-asin")]')))
-    print(f'item len: {len(items)}')
+    print(f'Page #{page_num} - Num of items: {len(items)}')
     
     for item in items:
         data_asin = item.get_attribute("data-asin")
@@ -40,6 +41,10 @@ for page_num in range(1, max_pages):
     
     next_page_el = driver.find_element(By.XPATH, '//a[@class="s-pagination-item s-pagination-next s-pagination-button s-pagination-separator"]')
     page_url = next_page_el.get_attribute("href")
+
+end_time = time.time()
+elapsed_time = end_time - start_time
+print(f"Time taken to complete: {elapsed_time} seconds")
 
 curr_df = pd.DataFrame({'Product ASIN': product_asin, 'Product Link': product_link})
 

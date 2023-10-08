@@ -54,19 +54,30 @@ class Scraper():
 
         self.page_url = url
 
+    def measure_time(func):
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+            print(f"Time taken to complete '{func.__name__}': {elapsed_time} seconds")
+            return result
+        return wrapper
+
+    @measure_time
     def pull_links(self):
         print(f'1. Pull All Product Links')
-
+        
         product_asin = []
         product_link = []
-        max_pages = 5
+        max_pages = 100
 
         for page_num in range(1, max_pages):
             self.driver.get(self.page_url)
             self.driver.implicitly_wait(10)
             
             items = WebDriverWait(self.driver, 10).until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "s-result-item s-asin")]')))
-            # print(f'item len: {len(items)}')
+            print(f'Page #{page_num} - Num of items: {len(items)}')
             
             for item in items:
                 data_asin = item.get_attribute("data-asin")
@@ -77,22 +88,21 @@ class Scraper():
             
             next_page_el = self.driver.find_element(By.XPATH, '//a[@class="s-pagination-item s-pagination-next s-pagination-button s-pagination-separator"]')
             page_url = next_page_el.get_attribute("href")
-        
-        data_dict = {
+
+        saved_df = pd.DataFrame({
             'Product ASIN': product_asin, 'Product Link': product_link
-        }
-        saved_df = pd.DataFrame(data_dict)
-        saved_file_path = 'Data/amazon_prod_link_scraper.csv'
-        self.genObj.save_dataframe_to_csv(saved_df, saved_file_path)
+        })
+        saved_df = saved_df.drop_duplicates()
+        self.genObj.save_dataframe_to_csv(saved_df, 'Data/amazon_prod_link_scraper.csv')
 
         self.driver.quit()
 
+    @measure_time
     def pull_data(self):
         print(f'2. Pull Product Data from Links')
 
         loaded_file_path = 'Data/amazon_prod_link_scraper.csv'
         loaded_df = self.genObj.load_dataframe_from_csv(loaded_file_path).copy()
-        loaded_df = loaded_df.drop_duplicates(subset='Product Link')
         loaded_df = loaded_df.dropna()
 
         loaded_df["product_name"] = ""
@@ -155,7 +165,8 @@ class Scraper():
         self.genObj.save_dataframe_to_csv(loaded_df, saved_file_path)
         
         self.driver.quit()
-        
+    
+    @measure_time
     def pull_reviews(self):
         print(f'3. Pull Product Reviews')
 
@@ -238,13 +249,12 @@ if __name__ == "__main__":
     print(initial_print)
     
     user_input = input("Enter the of option to run (e.g., '1' to pull all product links, '4' to exit etc.): ")
-    # print(f'{user_input}')
 
     while(True):
         if user_input == "4":
             break
         else:
-            scrape_url = 'https://www.amazon.com/s?k=phones&rh=n%3A7072561011&dc&ds=v1%3AdBDpBdof7U0nfs6nhU9Q6Fj2W7enc3cnVnsLbwsLbJ8&qid=1696625740&rnid=2941120011&ref=sr_nr_n_1'
+            scrape_url = 'https://www.amazon.com/s?rh=n%3A11056591&fs=true&ref=lp_11056591_sar'
             scraperObj = Scraper(scrape_url)
     
         if user_input == "1":
