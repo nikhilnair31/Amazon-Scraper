@@ -44,11 +44,23 @@ class General:
 class Scraper():
     def __init__(self, url):
         chrome_options = webdriver.ChromeOptions()
-        # chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--headless')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
 
+        # Clear cookies
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-popup-blocking")
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--start-maximized")
+
+        # Clear cache
+        chrome_options.add_argument("--disable-application-cache")
+        chrome_options.add_argument("--disable-gpu")
+
         self.driver = webdriver.Chrome(options = chrome_options)
+        self.driver.maximize_window()
 
         self.genObj = General()
 
@@ -60,7 +72,7 @@ class Scraper():
             result = func(*args, **kwargs)
             end_time = time.time()
             elapsed_time = end_time - start_time
-            print(f"Time taken to complete '{func.__name__}': {elapsed_time} seconds")
+            print(f"Time taken to complete '{func.__name__}': {elapsed_time:.0f}s")
             return result
         return wrapper
 
@@ -117,44 +129,26 @@ class Scraper():
                 self.driver.get(row["Product Link"])
                 self.driver.implicitly_wait(10)
 
-                # print(f'{"-"*50}\n')
-
-                # name = WebDriverWait(self.driver, 30).until(EC.presence_of_element_located((By.XPATH, '//div[@id="titleSection"]')))
                 name = self.driver.find_element(By.XPATH, '//div[@id="titleSection"]')
                 loaded_df.at[index, "product_name"] = name.text
-                # print(f'{loaded_df.at[index, "product_name"]}')
-
-                # price = self.driver.find_elements(By.XPATH, '//span[@class="a-price a-text-price a-size-medium apexPriceToPay"]/span[@class="a-offscreen"]')
-                whole_price = self.driver.find_elements(By.XPATH, '//span[@class="a-price-whole"]')
-                fraction_price = self.driver.find_elements(By.XPATH, '//span[@class="a-price-fraction"]')
-                if whole_price != [] and fraction_price != []:
-                    price = '.'.join([whole_price[0].text, fraction_price[0].text])
-                else:
-                    price = 0
+                
+                whole_price_elements = self.driver.find_elements(By.XPATH, '//span[@class="a-price-whole"]')
+                price = next((whole.text.strip() for whole in whole_price_elements if whole.text.strip()), '')
                 loaded_df.at[index, "product_price"] = price
-                # print(f'{loaded_df.at[index, "product_price"]}')
-
+                
                 rating = self.driver.find_element(By.XPATH, '//span[@class="reviewCountTextLinkedHistogram noUnderline"]')
                 loaded_df.at[index, "product_ratings"] = rating.text
-                # print(f'{loaded_df.at[index, "product_ratings"]}')
                 
                 ratings_num = self.driver.find_element(By.XPATH, '//span[@id="acrCustomerReviewText"]')
                 loaded_df.at[index, "product_ratings_num"] = ratings_num.text
-                # print(f'{loaded_df.at[index, "product_ratings_num"]}')
-
+                
                 features = self.driver.find_elements(By.XPATH, '//ul[@class="a-unordered-list a-vertical a-spacing-mini"]/li/span[@class="a-list-item"]')
                 product_features = [feature.text.strip() for feature in features]
                 loaded_df.at[index, "product_features"] = '\n'.join(product_features)
-                # print(f'{loaded_df.at[index, "product_features"]}')
-
+                
                 link = self.driver.find_element(By.XPATH, '//a[@data-hook="see-all-reviews-link-foot"]')
                 loaded_df.at[index, "product_review_link"] = link.get_attribute("href")
-                # print(f'{loaded_df.at[index, "product_review_link"]}')
 
-                # self.driver.quit()
-
-                # print(f'{"-"*50}\n')
-            
             except Exception as e: 
                 print(f'{"="*50}\n')
                 error_info = traceback.format_exc()
@@ -174,6 +168,7 @@ class Scraper():
         loaded_df = self.genObj.load_dataframe_from_csv(loaded_file_path).copy()
         loaded_df = loaded_df.drop_duplicates(subset='product_review_link')
         loaded_df = loaded_df.dropna()
+        # loaded_df = loaded_df.head(2)
 
         dict_of_data = {
             "Product ASIN": [], 
@@ -182,12 +177,14 @@ class Scraper():
         }
         for index, row in loaded_df.iterrows():
             try:
-                self.driver.get(row["product_review_link"])
-                self.driver.implicitly_wait(10)
+                next_page_link = row["product_review_link"]
 
-                while True:
-                    reviews = WebDriverWait(self.driver, 10).until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "a-section review aok-relative")]')))
-                    # print(f'reviews len: {len(reviews)}')
+                while next_page_link:
+                    self.driver.get(next_page_link)
+                    # self.driver.implicitly_wait(3)
+
+                    reviews = WebDriverWait(self.driver, 3).until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "a-section review aok-relative")]')))
+                    print(f'reviews\n{self.driver.current_url}\nlen: {len(reviews)}')
                     
                     for review in reviews:
                         # Save each products ASIN
@@ -197,37 +194,38 @@ class Scraper():
                         fetched_data = {
                             "reviewer_name": './/div[@class="a-profile-content"]',
                             "reviewer_date": './/span[@data-hook="review-date"]',
-                            "reviewer_verified": './/span[@data-hook="avp-badge"]',
-                            "review_body": './/div[@class="a-row a-spacing-small review-data"]',
+                            # "reviewer_verified": './/span[@data-hook="avp-badge"]',
+                            "review_body": './/span[@data-hook="review-body"]/span',
+                            # "reviewer_rating": './/i[@class="a-icon a-icon-star"]/span[@class="a-icon-alt"]',
+                            "reviewer_title": './/a[@data-hook="review-title"]/span[not(@class)]',
                         }
                         for column, xpath in fetched_data.items():
                             try:
-                                element = review.find_element(By.XPATH, xpath)
+                                element = WebDriverWait(review, 3).until(EC.visibility_of_element_located((By.XPATH, xpath)))
+                                # element = review.find_element(By.XPATH, xpath)
                                 dict_of_data[column].append(element.text)
-                            except NoSuchElementException:
+                            except Exception as e:
                                 dict_of_data[column].append("")
-                                print(f"{column} not found, filling with an empty string.")
-
-                        #FIXME: Get reviewer's rating 
-                        rating_element = review.find_element(By.XPATH, './/i[@data-hook="review-star-rating"]/span[@class="a-icon-alt"]')
-                        dict_of_data["reviewer_rating"].append(rating_element.text)
-
-                        title_element = review.find_element(By.XPATH, './/a[@data-hook="review-title"]/span[not(@class)]')
-                        dict_of_data["reviewer_title"].append(title_element.text)
+                                self.driver.save_screenshot(f"Data/error_screenshot_{row['Product ASIN']}_{column}.png")
+                                print(f"Failed to extract {column}. XPath used: {xpath}. Error: {str(e)}")
                     
                     #TODO: Confirm if this works
-                    # Wait until the next button is clickable, and then click it
-                    next_button = WebDriverWait(self.driver, 10).until(
-                        EC.element_to_be_clickable((By.XPATH, '//ul[@class="a-pagination"]//li[@class="a-last"]/a'))
-                    )
-                    next_button.click()
-
+                    try:
+                        next_button = WebDriverWait(self.driver, 3).until(
+                            EC.element_to_be_clickable((By.XPATH, '//ul[@class="a-pagination"]//li[@class="a-last"]/a'))
+                        )
+                        next_page_link = next_button.get_attribute("href")
+                    except Exception:
+                        next_page_link = None
+                        
             except Exception as e:
                 print(f'{"="*50}\n')
+                self.driver.save_screenshot(f"Data/error_screenshot_{row['Product ASIN']}.png")
                 error_info = traceback.format_exc()
                 print(f'ERROR\n{error_info}\n')
                 print(f'{"="*50}\n')
 
+        # print(f'{"-"*50}\ndict_of_data\n{dict_of_data}\n{"-"*50}\n')
         saved_df = pd.DataFrame(dict_of_data)
         saved_file_path = 'Data/amazon_prod_reviews_scraper.csv'
         self.genObj.save_dataframe_to_csv(saved_df, saved_file_path)
