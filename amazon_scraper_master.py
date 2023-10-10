@@ -44,7 +44,7 @@ class General:
 class Scraper():
     def __init__(self, url):
         chrome_options = webdriver.ChromeOptions()
-        chrome_options.add_argument('--headless')
+        # chrome_options.add_argument('--headless')
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
 
@@ -176,8 +176,12 @@ class Scraper():
 
         dict_of_data = {
             "Product ASIN": [], 
-            "reviewer_name": [], "reviewer_rating": [], "reviewer_title": [], 
-            "reviewer_date": [], "reviewer_verified": [], "review_body": []
+            "reviewer_name": [], 
+            "reviewer_date": [],
+            "reviewer_title": [], 
+            "review_body": [],
+            # "reviewer_verified": [], 
+            # "reviewer_rating": [],
         }
         for index, row in loaded_df.iterrows():
             try:
@@ -187,7 +191,7 @@ class Scraper():
                     self.driver.get(next_page_link)
                     # self.driver.implicitly_wait(3)
 
-                    reviews = WebDriverWait(self.driver, 3).until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "a-section review aok-relative")]')))
+                    reviews = WebDriverWait(self.driver, 10).until(EC.presence_of_all_elements_located((By.XPATH, '//div[contains(@class, "a-section review aok-relative")]')))
                     print(f'reviews\n{self.driver.current_url}\nlen: {len(reviews)}')
                     
                     for review in reviews:
@@ -198,10 +202,10 @@ class Scraper():
                         fetched_data = {
                             "reviewer_name": './/div[@class="a-profile-content"]',
                             "reviewer_date": './/span[@data-hook="review-date"]',
-                            # "reviewer_verified": './/span[@data-hook="avp-badge"]',
-                            "review_body": './/span[@data-hook="review-body"]/span',
-                            # "reviewer_rating": './/i[@class="a-icon a-icon-star"]/span[@class="a-icon-alt"]',
                             "reviewer_title": './/a[@data-hook="review-title"]/span[not(@class)]',
+                            "review_body": './/span[@data-hook="review-body"]/span',
+                            # "reviewer_verified": './/span[@data-hook="avp-badge"]',
+                            # "reviewer_rating": './/i[@class="a-icon a-icon-star"]/span[@class="a-icon-alt"]',
                         }
                         for column, xpath in fetched_data.items():
                             try:
@@ -210,10 +214,14 @@ class Scraper():
                                 dict_of_data[column].append(element.text)
                             except Exception as e:
                                 dict_of_data[column].append("")
-                                self.driver.save_screenshot(f"Data/error_screenshot_{row['Product ASIN']}_{column}.png")
+                                self.driver.save_screenshot(f"Other/error_screenshot_{row['Product ASIN']}_{column}.png")
                                 print(f"Failed to extract {column}. XPath used: {xpath}. Error: {str(e)}")
+
+                        # Ensure all keys have values appended in every loop to prevent unequal list lengths.
+                        for key in fetched_data.keys():
+                            if key not in fetched_data.keys():
+                                dict_of_data[key].append("")
                     
-                    #TODO: Confirm if this works
                     try:
                         next_button = WebDriverWait(self.driver, 3).until(
                             EC.element_to_be_clickable((By.XPATH, '//ul[@class="a-pagination"]//li[@class="a-last"]/a'))
@@ -224,7 +232,7 @@ class Scraper():
                         
             except Exception as e:
                 print(f'{"="*50}\n')
-                self.driver.save_screenshot(f"Data/error_screenshot_{row['Product ASIN']}.png")
+                self.driver.save_screenshot(f"Other/error_screenshot_{row['Product ASIN']}.png")
                 error_info = traceback.format_exc()
                 print(f'ERROR\n{error_info}\n')
                 print(f'{"="*50}\n')
