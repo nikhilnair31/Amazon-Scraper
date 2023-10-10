@@ -110,12 +110,13 @@ class Scraper():
         self.driver.quit()
 
     @measure_time
-    def pull_data(self):
+    def pull_data(self, head_count):
         print(f'2. Pull Product Data from Links')
 
         loaded_file_path = 'Data/amazon_prod_link_scraper.csv'
         loaded_df = self.genObj.load_dataframe_from_csv(loaded_file_path).copy()
         loaded_df = loaded_df.dropna()
+        loaded_df = loaded_df.head(head_count)
 
         loaded_df["product_name"] = ""
         loaded_df["product_price"] = ""
@@ -161,14 +162,17 @@ class Scraper():
         self.driver.quit()
     
     @measure_time
-    def pull_reviews(self):
+    def pull_reviews(self, slice_count):
         print(f'3. Pull Product Reviews')
 
         loaded_file_path = 'Data/amazon_prod_data_scraper.csv'
         loaded_df = self.genObj.load_dataframe_from_csv(loaded_file_path).copy()
         loaded_df = loaded_df.drop_duplicates(subset='product_review_link')
         loaded_df = loaded_df.dropna()
-        # loaded_df = loaded_df.head(2)
+
+        start_row = slice_count - 100
+        end_row = slice_count
+        loaded_df = loaded_df.iloc[start_row:end_row, :]
 
         dict_of_data = {
             "Product ASIN": [], 
@@ -259,10 +263,12 @@ if __name__ == "__main__":
             scraperObj.pull_links()
             break
         elif user_input == "2":
-            scraperObj.pull_data()
+            input_rowcount = input("Enter number of products to pull data for (e.g. 100 to pull first 100 products, 200 to pull first 200 products etc.) ")
+            scraperObj.pull_data(int(input_rowcount))
             break
         elif user_input == "3":
-            scraperObj.pull_reviews()
+            input_rowcount = input("Enter the slice to pull reviews for (e.g. 100 to pull product 0 to 100, 200 to pull product 100 to 200 etc.) ")
+            scraperObj.pull_reviews(int(input_rowcount))
             break
         else:
             print(f"Invalid choice '{user_input}'. Please enter valid choices (1/2/3/4).")
